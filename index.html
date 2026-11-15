@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>For You</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #hint {
+    position: fixed; bottom: 14px; left: 0; right: 0; text-align: center;
+    font: 12px/1 "Courier New", monospace; color: #555;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint">bosing — qaytadan boshlanadi</div>
+
+<script>
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const COLS = 90, ROWS = 72, RAMP = " .:-=+*#%&@";
+let W, H, cell, ox, oy;
+
+function resize() {
+  const d = devicePixelRatio || 1;
+  W = cv.width = innerWidth * d; H = cv.height = innerHeight * d;
+  cell = Math.min(W / COLS, H / ROWS);
+  ox = (W - cell * COLS) / 2; oy = (H - cell * ROWS) / 2;
+}
+addEventListener('resize', resize); resize();
+
+/* ---------- shapes drawn on a tiny offscreen canvas ---------- */
+function shape(draw) {
+  const o = document.createElement('canvas'); o.width = COLS; o.height = ROWS;
+  const g = o.getContext('2d'); draw(g);
+  const px = g.getImageData(0, 0, COLS, ROWS).data, pts = [];
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const i = (y * COLS + x) * 4, a = px[i + 3];
+    if (a < 40) continue;
+    const l = (px[i] * .3 + px[i + 1] * .59 + px[i + 2] * .11) / 255;
+    pts.push({ x, y, ch: RAMP[Math.max(1, Math.round(l * (RAMP.length - 1)))], col: `rgb(${px[i]},${px[i+1]},${px[i+2]})` });
+  }
+  return pts;
+}
+
+function heart(g, cx, cy, s, col) {
+  g.fillStyle = col; g.beginPath();
+  g.moveTo(cx, cy + s * .9);
+  g.bezierCurveTo(cx - s * 1.6, cy - s * .2, cx - s * .7, cy - s * 1.2, cx, cy - s * .35);
+  g.bezierCurveTo(cx + s * .7, cy - s * 1.2, cx + s * 1.6, cy - s * .2, cx, cy + s * .9);
+  g.fill();
+}
+
+function envelope(g, open) {
+  g.fillStyle = '#d9a37a'; g.fillRect(10, 26, 70, 34);              // body
+  g.strokeStyle = '#5a3a28'; g.lineWidth = 1.6;
+  g.beginPath();
+  if (open) { g.moveTo(10, 26); g.lineTo(45, 4); g.lineTo(80, 26); }  // flap up
+  else      { g.moveTo(10, 26); g.lineTo(45, 46); g.lineTo(80, 26); } // flap closed
+  g.moveTo(10, 60); g.lineTo(38, 40); g.moveTo(80, 60); g.lineTo(52, 40); g.stroke();
+  if (open) { g.fillStyle = '#ecc9a8'; g.beginPath(); g.moveTo(10, 26); g.lineTo(45, 4); g.lineTo(80, 26); g.fill(); }
+  else { heart(g, 45, 42, 5, '#c05cff'); }
+  g.fillStyle = '#3a2418'; g.font = 'bold 9px "Courier New"'; g.textAlign = 'center';
+  g.fillText('FOR YOU', 45, 56);
+}
+
+function rose(g) {
+  const el = (x, y, rx, ry, c, r = 0) => { g.fillStyle = c; g.beginPath(); g.ellipse(x, y, rx, ry, r, 0, 7); g.fill(); };
+  const arc = (x, y, R, a, b, c, w) => { g.strokeStyle = c; g.lineWidth = w; g.beginPath(); g.arc(x, y, R, a, b); g.stroke(); };
+  // poya va barglar
+  g.strokeStyle = '#4fb3a0'; g.lineWidth = 2.4;
+  g.beginPath(); g.moveTo(45, 40); g.quadraticCurveTo(50, 54, 45, 71); g.stroke();
+  el(35, 56, 8, 3.2, '#3f9a8c', -.55); el(56, 60, 8, 3.2, '#4fb3a0', .55);
+  g.strokeStyle = '#2f7468'; g.lineWidth = .9;
+  g.beginPath(); g.moveTo(29, 59); g.lineTo(41, 54); g.moveTo(62, 63); g.lineTo(50, 58); g.stroke();
+  // gul boshi: dumaloq, qatlam-qatlam
+  el(45, 26, 18, 16, '#7a0f1c');
+  el(33, 27, 8, 12, '#a8182a', -.35); el(57, 27, 8, 12, '#a8182a', .35);
+  el(45, 33, 15, 9, '#c4202f');
+  el(45, 24, 12.5, 12, '#d62c36');
+  el(45, 22, 8.5, 9, '#e8454c');
+  // gulbarg o'ramlari (spiral)
+  arc(45, 30, 13, .2, 2.95, '#5a0a14', 1.1);
+  arc(45, 23, 9, 3.4, 6.1, '#8e1520', 1);
+  arc(45, 22, 5.5, .6, 4.6, '#5a0a14', 1);
+  arc(45, 21, 2.6, 3, 7.2, '#8e1520', .9);
+  el(44, 20, 1.8, 2.4, '#ff8a80');
+  // kosachalar
+  g.strokeStyle = '#3f9a8c'; g.lineWidth = 1.7; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(45, 41); g.quadraticCurveTo(38, 42, 34, 37);
+  g.moveTo(45, 41); g.quadraticCurveTo(52, 42, 56, 37); g.stroke();
+}
+
+const SHAPES = [shape(g => envelope(g, false)), shape(g => envelope(g, true)), shape(rose)];
+const N = Math.max(...SHAPES.map(s => s.length));
+
+/* every shape gets exactly N targets, sorted so neighbours stay neighbours */
+const T = SHAPES.map(s => {
+  const arr = Array.from({ length: N }, (_, i) => s[Math.floor(i * s.length / N)]);
+  return arr.map(p => ({ ...p, k: p.y + Math.random() * 6 })).sort((a, b) => a.k - b.k);
+});
+const P = Array.from({ length: N }, (_, i) => ({
+  rx: Math.random() * COLS, ry: Math.random() * ROWS, d: Math.random(), x: 0, y: 0
+}));
+
+/* ---------- timeline (seconds) ---------- */
+const TL = { form: [1.2, 3.4], open: [5, 6.4], rose: [6.4, 8.4], fadeOut: [12, 13.6], end: 14 };
+const ease = t => t < 0 ? 0 : t > 1 ? 1 : t * t * (3 - 2 * t);
+const seg = (t, [a, b]) => ease((t - a) / (b - a));
+
+let t0 = performance.now();
+addEventListener('pointerdown', () => t0 = performance.now());
+
+const streaks = Array.from({ length: 26 }, () => ({ y: Math.random() * ROWS, x: Math.random() * COLS, l: 6 + Math.random() * 30, v: 10 + Math.random() * 40 }));
+const dust = Array.from({ length: 70 }, () => ({ x: Math.random() * COLS, y: Math.random() * ROWS, v: .5 + Math.random() * 2 }));
+
+function put(ch, x, y, col, a) {
+  ctx.globalAlpha = a; ctx.fillStyle = col;
+  ctx.fillText(ch, ox + (x + .5) * cell, oy + (y + .5) * cell);
+}
+
+function frame(now) {
+  const t = ((now - t0) / 1000) % TL.end, tt = now / 1000;
+  ctx.fillStyle = '#000'; ctx.globalAlpha = 1; ctx.fillRect(0, 0, W, H);
+  ctx.font = `bold ${cell * 1.15}px "Courier New", monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+  // drifting white dust
+  for (const d of dust) { d.y -= d.v * .02; if (d.y < 0) d.y = ROWS; put('.', d.x, d.y, '#fff', .35 + .3 * Math.sin(tt * 2 + d.x)); }
+
+  const fo = 1 - seg(t, TL.fadeOut);
+  const a = seg(t, TL.form), b = seg(t, TL.open), c = seg(t, TL.rose);
+  const wob = (i, k) => Math.sin(tt * 3 + i * .37) * k;
+
+  for (let i = 0; i < N; i++) {
+    const p = P[i], e = T[0][i], f = T[1][i], r = T[2][i];
+    const stag = (u) => ease(u * 1.6 - p.d * .6);                 // per-particle delay
+    let x, y, col, ch, al = fo;
+    if (t < TL.open[0]) {                                         // dust -> envelope
+      const u = stag(a);
+      x = p.rx + (e.x - p.rx) * u; y = p.ry + (e.y - p.ry) * u;
+      col = u < .9 ? '#d8b9a0' : e.col; ch = u < .9 ? '.' : e.ch;
+      al *= .25 + .75 * u;
+      if (t > 3.6) { const pulse = .5 + .5 * Math.sin(tt * 5); if (e.col.startsWith('rgb(19')) al *= .7 + .3 * pulse; }
+    } else if (t < TL.rose[0]) {                                  // flap opens, burst up
+      const u = stag(b);
+      x = e.x + (f.x - e.x) * u; y = e.y + (f.y - e.y) * u - Math.sin(u * 3.14) * 6 * p.d;
+      col = f.col; ch = f.ch;
+    } else {                                                      // envelope -> rose
+      const u = stag(c);
+      x = f.x + (r.x - f.x) * u + Math.sin(u * 3.14) * (p.d - .5) * 18;
+      y = f.y + (r.y - f.y) * u - Math.sin(u * 3.14) * 10 * p.d;
+      col = u < .5 ? f.col : r.col; ch = u < .5 ? f.ch : r.ch;
+    }
+    if (t > 9) { x += wob(i, .12); y += Math.sin(tt * 2 + x * .2) * .08; }
+    put(ch, x, y, col, al);
+  }
+
+  // blue light streaks behind the rose
+  if (t > TL.rose[0] + .8) {
+    const s = Math.min(1, (t - TL.rose[0] - .8) / 1.5) * fo;
+    for (const k of streaks) {
+      k.x += k.v * .016; if (k.x - k.l > COLS) { k.x = 0; k.y = 6 + Math.random() * 40; }
+      for (let j = 0; j < k.l; j += 1) {
+        const xx = k.x - j; if (xx < 0 || xx > COLS) continue;
+        put(j % 7 === 0 ? '=' : '-', xx, k.y, '#4a7dff', s * (1 - j / k.l) * .8);
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
